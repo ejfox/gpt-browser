@@ -1,0 +1,18 @@
+{
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@nem035/gpt-3-encoder": "^1.1.7",
+    "@supabase/supabase-js": "^2.26.0",
+    "blessed": "^0.1.81",
+    "chance": "^1.1.11",
+    "dotenv": "^16.3.1",
+    "fs": "^0.0.1-security",
+    "inquirer": "^9.2.8",
+    "openai": "^3.3.0",
+    "puppeteer": "^20.8.2",
+    "yargs": "^17.7.2"
+  }
+}
