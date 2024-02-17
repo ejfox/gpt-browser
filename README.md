@@ -21,16 +21,11 @@ To install and run the Web Summarizer, follow these steps:
 
 ## Usage
 
-There are two ways to use the Web Summarizer:
 
-- By passing a URL as a command line argument:
-  ```
-  node index.js --url https://example.com
-  ```
-- By running the script without any arguments, which will prompt you to input a URL in the terminal:
-  ```
-  node index.js
-  ```
+Pass in a URL as an argument to the script to summarize a webpage. For example:
+```
+node index.js --url https://example.com
+```
 
 ## How it works
 
