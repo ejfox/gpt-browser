@@ -20,16 +20,21 @@ const allowedTextEls =
 async function fetchAndSummarizeUrl(url, options = {}) {
   const cleanedUrl = cleanUrlForPuppeteer(url);
 
-  logMessage(`📝 Fetching URL: ${cleanedUrl}`);
-  const data = await fetchAndParseURL(cleanedUrl);
+  try {
+    logMessage(`📝 Fetching URL: ${cleanedUrl}`);
+    const data = await fetchAndParseURL(cleanedUrl);
 
-  logMessage(`📝 Fetched URL: ${cleanedUrl}`);
-  const summary = await generateSummary(cleanedUrl, data, options);
+    logMessage(`📝 Fetched URL: ${cleanedUrl}`);
+    const summary = await generateSummary(cleanedUrl, data, options);
 
-  logMessage(`📝 Generated summary for URL: ${cleanedUrl}`);
-  console.log(summary);
+    logMessage(`📝 Generated summary for URL: ${cleanedUrl}`);
+    console.log(summary);
 
-  return summary;
+    return summary;
+  } catch (error) {
+    logMessage(error);
+    return error;
+  }
 }
 
 async function generateSummary(url, data, { chunkAmount = 12952 } = {}) {
@@ -101,36 +106,41 @@ async function generateSummary(url, data, { chunkAmount = 12952 } = {}) {
 
 // Function to fetch and parse the URL using puppeteer
 async function fetchAndParseURL(url) {
-  const browser = await puppeteer.launch({
-    headless: "new",
-  });
-  const page = await browser.newPage();
-  await page.setUserAgent(randomUserAgent());
-  await page.goto(url);
-  logMessage(`🕸️ Navigating to ${url}`);
-  await page.waitForSelector("body");
+  try {
+    const browser = await puppeteer.launch({
+      headless: "new",
+    });
+    const page = await browser.newPage();
+    await page.setUserAgent(randomUserAgent());
+    await page.goto(url);
+    logMessage(`🕸️ Navigating to ${url}`);
+    await page.waitForSelector("body");
 
-  const title = await page.title();
-  const text = await page.$$eval(allowedTextEls, (elements) =>
-    elements
-      .map((element) => element?.textContent.replace(/<[^>]*>?/gm, "") + " ")
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim()
-  );
+    const title = await page.title();
+    const text = await page.$$eval(allowedTextEls, (elements) =>
+      elements
+        .map((element) => element?.textContent.replace(/<[^>]*>?/gm, "") + " ")
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim()
+    );
 
-  const links = await page.$$eval("a", (elements) =>
-    elements.map((element) => {
-      return {
-        text: element?.textContent.replace(/<[^>]*>?/gm, "").trim(),
-        href: element.href,
-      };
-    })
-  );
+    const links = await page.$$eval("a", (elements) =>
+      elements.map((element) => {
+        return {
+          text: element?.textContent.replace(/<[^>]*>?/gm, "").trim(),
+          href: element.href,
+        };
+      })
+    );
 
-  logMessage(`📝 Page raw text: ${text}`);
-  await browser.close();
-  return { title, text, links };
+    logMessage(`📝 Page raw text: ${text}`);
+    await browser.close();
+    return { title, text, links };
+  } catch (error) {
+    logMessage(`❌ Error fetching and parsing URL: ${error}`);
+    throw error;
+  }
 }
 
 // Function to process chunks of text and send them to OpenAI API for processing
