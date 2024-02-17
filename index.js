@@ -37,7 +37,15 @@ async function fetchAndSummarizeUrl(url, options = {}) {
   }
 }
 
-async function generateSummary(url, data, { chunkAmount = 12952 } = {}) {
+async function generateSummary(
+  url,
+  data,
+  {
+    chunkAmount = 12952,
+    summaryPrompt = "Please sort these facts from in order of importance, with the most important fact first",
+    summaryMaxTokens = 4096,
+  } = {}
+) {
   logMessage("📝  Generating summary...");
 
   let text = data.text;
@@ -87,14 +95,14 @@ async function generateSummary(url, data, { chunkAmount = 12952 } = {}) {
 
   const summaryCompletion = await openai.chat.completions.create({
     model: "gpt-4-turbo-preview",
-    max_tokens: 4096,
+    max_tokens: summaryMaxTokens,
     temperature: 1.3,
     top_p: 0.88,
     frequency_penalty: 0.1,
     messages: [
       {
         role: "user",
-        content: `Please sort these facts from ${url} in order of importance, with the most important fact first:\n\n${factList}`,
+        content: `${summaryPrompt}:\n\nURL: <${url}>\n\n${factList}`,
       },
     ],
   });
