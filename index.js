@@ -17,14 +17,14 @@ const allowedTextEls =
   "p, h1, h2, h3, h4, h5, h6, a, td, th, tr, pre, code, blockquote";
 
 // Main function to fetch and summarize a webpage from a URL
-async function fetchAndSummarizeUrl(url) {
+async function fetchAndSummarizeUrl(url, options = {}) {
   const cleanedUrl = cleanUrlForPuppeteer(url);
 
   logMessage(`📝 Fetching URL: ${cleanedUrl}`);
   const data = await fetchAndParseURL(cleanedUrl);
 
   logMessage(`📝 Fetched URL: ${cleanedUrl}`);
-  const summary = await generateSummary(cleanedUrl, data);
+  const summary = await generateSummary(cleanedUrl, data, options);
 
   logMessage(`📝 Generated summary for URL: ${cleanedUrl}`);
   console.log(summary);
