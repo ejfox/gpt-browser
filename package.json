@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "dependencies": {
     "@nem035/gpt-3-encoder": "^1.1.7",
@@ -20,5 +20,8 @@
     "openai": "^4.28.0",
     "puppeteer": "^20.8.2",
     "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   }
 }

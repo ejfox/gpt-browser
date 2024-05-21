@@ -1,7 +1,7 @@
 // Load necessary packages
 const dotenv = require("dotenv");
 const puppeteer = require("puppeteer");
-const { encode, decode } = require("@nem035/gpt-3-encoder");
+const { encode } = require("@nem035/gpt-3-encoder");
 const chance = require("chance").Chance();
 const yargs = require("yargs/yargs");
 const { hideBin } = require("yargs/helpers");
@@ -13,19 +13,46 @@ const OpenAI = require("openai");
 const openai = new OpenAI();
 
 // Set constants
-const allowedTextEls =
+const ALLOWED_TEXT_ELEMENTS =
   "p, h1, h2, h3, h4, h5, h6, a, td, th, tr, pre, code, blockquote";
+const DEFAULT_CHUNK_AMOUNT = 12952;
+const DEFAULT_SUMMARY_PROMPT =
+  "Please sort these facts from in order of importance, with the most important fact first";
+const DEFAULT_SUMMARY_MAX_TOKENS = 4096;
 
-// Main function to fetch and summarize a webpage from a URL
+/**
+ * Main function to fetch and summarize a webpage from a URL
+ * @param {string} url - The URL of the webpage to summarize
+ * @param {Object} options - Additional options for summarization
+ * @param {string} options.model - The OpenAI model to use for summarization (default: "gpt-4-turbo-preview")
+ * @param {number} options.chunkAmount - The desired chunk amount (default: DEFAULT_CHUNK_AMOUNT)
+ * @param {string} options.summaryPrompt - The prompt for generating the summary (default: DEFAULT_SUMMARY_PROMPT)
+ * @param {number} options.summaryMaxTokens - The maximum number of tokens for the summary (default: DEFAULT_SUMMARY_MAX_TOKENS)
+ * @param {string} options.chunkPrompt - The prompt for processing chunks (default: WEBPAGE_UNDERSTANDER_PROMPT)
+ * @returns {Promise<string>} - The generated summary
+ */
 async function fetchAndSummarizeUrl(url, options = {}) {
   const cleanedUrl = cleanUrlForPuppeteer(url);
+  const {
+    model = "gpt-3.5-turbo",
+    chunkAmount = DEFAULT_CHUNK_AMOUNT,
+    summaryPrompt = DEFAULT_SUMMARY_PROMPT,
+    summaryMaxTokens = DEFAULT_SUMMARY_MAX_TOKENS,
+    chunkPrompt = WEBPAGE_UNDERSTANDER_PROMPT,
+  } = options;
 
   try {
     logMessage(`📝 Fetching URL: ${cleanedUrl}`);
     const data = await fetchAndParseURL(cleanedUrl);
 
     logMessage(`📝 Fetched URL: ${cleanedUrl}`);
-    const summary = await generateSummary(cleanedUrl, data, options);
+    const summary = await generateSummary(cleanedUrl, data, {
+      model,
+      chunkAmount,
+      summaryPrompt,
+      summaryMaxTokens,
+      chunkPrompt,
+    });
 
     logMessage(`📝 Generated summary for URL: ${cleanedUrl}`);
     console.log(summary);
@@ -37,53 +64,40 @@ async function fetchAndSummarizeUrl(url, options = {}) {
   }
 }
 
-async function generateSummary(
-  url,
-  data,
-  {
-    chunkAmount = 12952,
-    summaryPrompt = "Please sort these facts from in order of importance, with the most important fact first",
-    summaryMaxTokens = 4096,
-  } = {}
-) {
+/**
+ * Generate a summary from the fetched webpage data
+ * @param {string} url - The URL of the webpage
+ * @param {Object} data - The fetched webpage data
+ * @param {Object} options - Additional options for summarization
+ * @param {string} options.model - The OpenAI model to use for summarization
+ * @param {number} options.chunkAmount - The desired chunk amount
+ * @param {string} options.summaryPrompt - The prompt for generating the summary
+ * @param {number} options.summaryMaxTokens - The maximum number of tokens for the summary
+ * @param {string} options.chunkPrompt - The prompt for processing chunks
+ * @returns {Promise<string>} - The generated summary
+ */
+async function generateSummary(url, data, options) {
+  const { model, chunkAmount, summaryPrompt, summaryMaxTokens, chunkPrompt } =
+    options;
+
   logMessage("📝  Generating summary...");
 
-  let text = data.text;
-
-  // remove newlines
-  text = text.replace(/\n/g, " ");
-  // remove tabs
-  text = text.replace(/\t/g, " ");
-  // remove multiple spaces
-  text = text.replace(/ +(?= )/g, "");
-
-  // add links to the text
-  const links = data.links;
-
-  // const chunkAmount = 7000
-  // const chunkAmount = 12952;
-  let chunks = [];
-  let chunkStart = 0;
-  let tokenCount = countMessageTokens(text);
+  let text = cleanText(data.text);
+  const tokenCount = countMessageTokens(text);
   logMessage(`📝  Token count: ${tokenCount}`);
-  let chunkEnd = chunkAmount; // set the chunkEnd to the chunkAmount so we can start the loop
-  while (chunkStart < tokenCount) {
-    // we need to make sure that the chunkEnd is not greater than the tokenCount
-    if (chunkEnd > tokenCount) {
-      chunkEnd = tokenCount;
-    }
-    chunks.push(text.slice(chunkStart, chunkEnd));
-    chunkStart = chunkEnd;
-    chunkEnd = chunkStart + chunkAmount;
-  }
 
+  const chunks = splitTextIntoChunks(text, chunkAmount, tokenCount);
   logMessage(`📝  Splitting text into ${chunks.length} chunks...`);
   logMessage(`📝  Chunk length: ${chunkAmount} tokens`);
 
   let factList = "";
   try {
-    const chunkResponses = await processChunks(chunks, data);
-
+    const chunkResponses = await processChunks(
+      chunks,
+      data,
+      model,
+      chunkPrompt
+    );
     factList = chunkResponses.join("\n");
   } catch (error) {
     logMessage(error);
@@ -112,12 +126,14 @@ async function generateSummary(
   return summary;
 }
 
-// Function to fetch and parse the URL using puppeteer
+/**
+ * Fetch and parse the URL using puppeteer
+ * @param {string} url - The URL to fetch and parse
+ * @returns {Promise<Object>} - The fetched webpage data
+ */
 async function fetchAndParseURL(url) {
   try {
-    const browser = await puppeteer.launch({
-      headless: "new",
-    });
+    const browser = await puppeteer.launch({ headless: "new" });
     const page = await browser.newPage();
     await page.setUserAgent(randomUserAgent());
     await page.goto(url);
@@ -125,7 +141,7 @@ async function fetchAndParseURL(url) {
     await page.waitForSelector("body");
 
     const title = await page.title();
-    const text = await page.$$eval(allowedTextEls, (elements) =>
+    const text = await page.$$eval(ALLOWED_TEXT_ELEMENTS, (elements) =>
       elements
         .map((element) => element?.textContent.replace(/<[^>]*>?/gm, "") + " ")
         .join(" ")
@@ -134,12 +150,10 @@ async function fetchAndParseURL(url) {
     );
 
     const links = await page.$$eval("a", (elements) =>
-      elements.map((element) => {
-        return {
-          text: element?.textContent.replace(/<[^>]*>?/gm, "").trim(),
-          href: element.href,
-        };
-      })
+      elements.map((element) => ({
+        text: element?.textContent.replace(/<[^>]*>?/gm, "").trim(),
+        href: element.href,
+      }))
     );
 
     logMessage(`📝 Page raw text: ${text}`);
@@ -151,8 +165,16 @@ async function fetchAndParseURL(url) {
   }
 }
 
-// Function to process chunks of text and send them to OpenAI API for processing
-async function processChunks(chunks, data, limit = 2) {
+/**
+ * Process chunks of text and send them to OpenAI API for processing
+ * @param {string[]} chunks - The chunks of text to process
+ * @param {Object} data - The fetched webpage data
+ * @param {string} model - The OpenAI model to use for processing
+ * @param {string} chunkPrompt - The prompt for processing chunks
+ * @param {number} limit - The maximum number of chunks to process concurrently
+ * @returns {Promise<string[]>} - The processed chunk responses
+ */
+async function processChunks(chunks, data, model, chunkPrompt, limit = 2) {
   const results = [];
   chunks = chunks.filter((chunk) => chunk.length > 0);
 
@@ -165,14 +187,14 @@ async function processChunks(chunks, data, limit = 2) {
         logMessage(`📝 Chunk text: ${chunk}`);
 
         const completion = await openai.chat.completions.create({
-          model: "gpt-4-turbo-preview",
+          model,
           max_tokens: 2048,
           temperature: 0.5,
           presence_penalty: -0.1,
           messages: [
             {
               role: "user",
-              content: `${WEBPAGE_UNDERSTANDER_PROMPT} ${chunk} Remember to ignore any navigation links or other text that isn't relevant to the main content of the page. Include relevant URLs in your summaries wherever possible.`,
+              content: `${chunkPrompt} ${chunk} Remember to ignore any navigation links or other text that isn't relevant to the main content of the page. Include relevant URLs in your summaries wherever possible.`,
             },
           ],
         });
@@ -186,6 +208,10 @@ async function processChunks(chunks, data, limit = 2) {
   return results;
 }
 
+/**
+ * Generate a random user agent
+ * @returns {string} - The randomly selected user agent
+ */
 function randomUserAgent() {
   const potentialUserAgents = [
     `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36`,
@@ -195,20 +221,22 @@ function randomUserAgent() {
   ];
 
   const pickedUserAgent = chance.pickone(potentialUserAgents);
-
   logMessage(`📝 Picked User Agent: ${pickedUserAgent}`);
 
   return pickedUserAgent;
 }
 
+/**
+ * Count the number of tokens in a message array
+ * @param {string[]} messageArray - The array of messages
+ * @returns {number} - The total number of tokens
+ */
 function countMessageTokens(messageArray = []) {
   let totalTokens = 0;
-  if (!messageArray) {
+  if (!messageArray || messageArray.length === 0) {
     return totalTokens;
   }
-  if (messageArray.length === 0) {
-    return totalTokens;
-  }
+
   for (let i = 0; i < messageArray.length; i++) {
     const message = messageArray[i];
     const encodedMessage = encode(JSON.stringify(message));
@@ -218,30 +246,130 @@ function countMessageTokens(messageArray = []) {
   return totalTokens;
 }
 
+/**
+ * Clean the URL for use with puppeteer
+ * @param {string} dirtyUrl - The URL to clean
+ * @returns {string} - The cleaned URL
+ */
 function cleanUrlForPuppeteer(dirtyUrl) {
   if (!dirtyUrl) return "";
   dirtyUrl = dirtyUrl.toString();
   return dirtyUrl.replace(/^'+|'+$/g, "");
 }
 
+/**
+ * Clean the text by removing newlines, tabs, and multiple spaces
+ * @param {string} text - The text to clean
+ * @returns {string} - The cleaned text
+ */
+function cleanText(text) {
+  return text
+    .replace(/\n/g, " ")
+    .replace(/\t/g, " ")
+    .replace(/ +(?= )/g, "");
+}
+
+/**
+ * Split the text into chunks based on the specified chunk amount and token count
+ * @param {string} text - The text to split into chunks
+ * @param {number} chunkAmount - The desired chunk amount
+ * @param {number} tokenCount - The total token count of the text
+ * @returns {string[]} - The array of text chunks
+ */
+function splitTextIntoChunks(text, chunkAmount, tokenCount) {
+  const chunks = [];
+  let chunkStart = 0;
+  let chunkEnd = chunkAmount;
+
+  while (chunkStart < tokenCount) {
+    if (chunkEnd > tokenCount) {
+      chunkEnd = tokenCount;
+    }
+    chunks.push(text.slice(chunkStart, chunkEnd));
+    chunkStart = chunkEnd;
+    chunkEnd = chunkStart + chunkAmount;
+  }
+
+  return chunks;
+}
+
+/**
+ * Sleep for a specified number of milliseconds
+ * @param {number} ms - The number of milliseconds to sleep
+ * @returns {Promise} - A promise that resolves after the specified time
+ */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Log a message to the console
+ * @param {string} message - The message to log
+ */
 function logMessage(message) {
   console.log(message);
 }
 
+/**
+ * Main function to handle command-line arguments and initiate the summarization process
+ */
 async function main() {
-  const argv = yargs(hideBin(process.argv)).option("url", {
-    alias: "u",
-    type: "string",
-    description: "URL to summarize",
-  }).argv;
+  const argv = yargs(hideBin(process.argv))
+    .option("url", {
+      alias: "u",
+      type: "string",
+      description: "URL to summarize",
+    })
+    .option("model", {
+      alias: "m",
+      type: "string",
+      description: "OpenAI model to use for summarization",
+      default: "gpt-4-turbo-preview",
+    })
+    .option("chunkAmount", {
+      alias: "c",
+      type: "number",
+      description: "Desired chunk size for text splitting",
+      default: DEFAULT_CHUNK_AMOUNT,
+    })
+    .option("summaryPrompt", {
+      alias: "sp",
+      type: "string",
+      description: "Prompt for generating the summary",
+      default: DEFAULT_SUMMARY_PROMPT,
+    })
+    .option("summaryMaxTokens", {
+      alias: "smt",
+      type: "number",
+      description: "Maximum number of tokens for the summary",
+      default: DEFAULT_SUMMARY_MAX_TOKENS,
+    })
+    .option("chunkPrompt", {
+      alias: "cp",
+      type: "string",
+      description: "Prompt for processing text chunks",
+      default: WEBPAGE_UNDERSTANDER_PROMPT,
+    }).argv;
 
-  let url = argv.url;
+  const {
+    url,
+    model,
+    chunkAmount,
+    summaryPrompt,
+    summaryMaxTokens,
+    chunkPrompt,
+  } = argv;
+
   if (url) {
-    await fetchAndSummarizeUrl(url);
+    const options = {
+      model,
+      chunkAmount,
+      summaryPrompt,
+      summaryMaxTokens,
+      chunkPrompt,
+    };
+
+    await fetchAndSummarizeUrl(url, options);
   } else {
     console.error("No URL provided");
   }

@@ -1,42 +1,116 @@
-# Web Summarizer README
+# GPT Browser
 
-Web Summarizer is a powerful Node.js script that utilizes OpenAI's GPT-3 API to summarize any webpage's content in a meaningful and interactive way. The script is capable of fetching, parsing, and analyzing the webpage, then summarizing it using GPT-3. The summarized content is then displayed in a user-friendly terminal interface, allowing users to navigate the summaries of web pages.
+A powerful Node.js package that fetches a webpage, analyzes its content, and generates a summary using OpenAI's Chat API.
 
 ## Features
 
-- Fetches and parses webpages using Puppeteer.
-- Uses OpenAI's GPT-3 API to generate a summary of the webpage content.
-- Interactive terminal interface with real-time log and summary display using Blessed.
-- Capable of summarizing a list of URLs one by one.
-- User-friendly input prompt for URLs.
+- Fetches and parses webpages using Puppeteer
+- Generates summaries using OpenAI's Chat API
+- Customizable summarization options (model, prompts, token limits)
+- Easy integration into your Node.js projects
+- Command-line interface using `npx`
 
 ## Installation
 
-To install and run the Web Summarizer, follow these steps:
+To use GPT Browser in your project, install it from npm:
 
-1. Clone this repository.
-2. Install the required packages by running `npm install` in the root directory of the project.
-3. Copy the `.env.example` file to `.env` and fill in your OpenAI API key and organization.
-4. Run the script using `node index.js`.
+```bash
+npm install @ejfox/gpt-browser
+```
 
 ## Usage
 
+### In a Node.js Project
 
-Pass in a URL as an argument to the script to summarize a webpage. For example:
+Import the `fetchAndSummarizeUrl` function from the package and use it in your code:
+
+```javascript
+const { fetchAndSummarizeUrl } = require('@ejfox/gpt-browser');
+
+async function main() {
+  const url = 'https://example.com';
+  const options = {
+    model: 'gpt-3.5-turbo',
+    summaryPrompt: 'Summarize the key points from the webpage:',
+  };
+
+  const summary = await fetchAndSummarizeUrl(url, options);
+  console.log(summary);
+}
+
+main();
 ```
-node index.js --url https://example.com
+
+### Using `npx`
+
+You can also use GPT Browser directly from the command line using `npx`:
+
+```bash
+npx @ejfox/gpt-browser --url https://example.com
 ```
 
-## How it works
+#### Customization Options
 
-The script begins by launching a headless browser and navigating to the given URL. It then fetches and parses the webpage content, selecting only the relevant text elements. 
+You can customize the summarization process by passing additional options:
 
-The parsed text is processed and divided into chunks, which are then sent to the OpenAI API for summarization. The script processes the response, generates a summary, and displays it in the terminal interface. The summary includes the most important facts and the links found on the page.
+- `--model` or `-m`: OpenAI model to use for summarization (default: "gpt-4-turbo-preview")
+- `--chunkAmount` or `-c`: Desired chunk size for text splitting (default: 12952)
+- `--summaryPrompt` or `-sp`: Prompt for generating the summary (default: "Please sort these facts from in order of importance, with the most important fact first")
+- `--summaryMaxTokens` or `-smt`: Maximum number of tokens for the summary (default: 4096)
+- `--chunkPrompt` or `-cp`: Prompt for processing text chunks (default: WEBPAGE_UNDERSTANDER_PROMPT)
 
-## Notes
+Example with custom options:
 
-The summarization is performed using OpenAI's GPT-3 API, so it requires an API key and is subject to OpenAI's usage costs. Please be aware of this before using the script. 
+```bash
+npx @ejfox/gpt-browser --url https://example.com --model gpt-3.5-turbo --chunkAmount 8000 --summaryPrompt "Summarize the key points from the webpage:"
+```
 
-Additionally, please ensure that your OpenAI API key and organization are properly set in your `.env` file. Without these, the script will not function.
+You can also store your prompts in local text files and echo them into the command:
 
-This script is intended for educational and research purposes. Please use responsibly and respect the terms of service of the websites you are summarizing.
+```bash
+npx @ejfox/gpt-browser --url https://example.com --summaryPrompt "$(cat summaryprompt1.txt)" --chunkPrompt "$(cat chunkprompt2.txt)"
+```
+
+## Examples
+
+1. Summarize a Wikipedia article in your Node.js project:
+
+```javascript
+const { fetchAndSummarizeUrl } = require('@ejfox/gpt-browser');
+
+async function main() {
+  const url = 'https://en.wikipedia.org/wiki/OpenAI';
+  const summary = await fetchAndSummarizeUrl(url);
+  console.log(summary);
+}
+
+main();
+```
+
+2. Summarize a news article with a custom prompt using `npx`:
+
+```bash
+npx @ejfox/gpt-browser --url https://www.theatlantic.com/science/archive/2024/02/talking-whales-project-ceti --summaryPrompt "Provide a brief overview of the main events covered in the article:"
+```
+
+3. Summarize a blog post using a different OpenAI model in your project:
+
+```javascript
+const { fetchAndSummarizeUrl } = require('@ejfox/gpt-browser');
+
+async function main() {
+  const url = 'https://openai.com/blog/chatgpt';
+  const options = {
+    model: 'gpt-3.5-turbo',
+  };
+
+  const summary = await fetchAndSummarizeUrl(url, options);
+  console.log(summary);
+}
+
+main();
+```
+
+## License
+
+This project is open-source and available under the [MIT License](LICENSE).
