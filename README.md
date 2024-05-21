@@ -1,6 +1,12 @@
 # GPT Browser
 
-A powerful Node.js package that fetches a webpage, analyzes its content, and generates a summary using OpenAI's Chat API.
+A powerful Node.js package that fetches a webpage, breaks it into chunks, analyzes its content, and generates a summary using OpenAI's Chat API.
+
+
+
+https://github.com/ejfox/gpt-browser/assets/530073/e7a5a81e-40ca-44fb-8d2d-a1b0daa235b5
+
+
 
 ## Features
 
