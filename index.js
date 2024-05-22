@@ -107,6 +107,9 @@ async function generateSummary(url, data, options) {
   logMessage(`📝  Generated ${factList.split("\n").length} fact summary.`);
   logMessage(`📝  Generating summary of: ${factList}`);
 
+  // pause for a bit before generating the summary
+  await sleep(1000);
+
   const summaryCompletion = await openai.chat.completions.create({
     model: "gpt-4-turbo-preview",
     max_tokens: summaryMaxTokens,
@@ -172,9 +175,17 @@ async function fetchAndParseURL(url) {
  * @param {string} model - The OpenAI model to use for processing
  * @param {string} chunkPrompt - The prompt for processing chunks
  * @param {number} limit - The maximum number of chunks to process concurrently
+ * @param {number} sleepDuration - The duration to sleep between API requests in milliseconds
  * @returns {Promise<string[]>} - The processed chunk responses
  */
-async function processChunks(chunks, data, model, chunkPrompt, limit = 2) {
+async function processChunks(
+  chunks,
+  data,
+  model,
+  chunkPrompt,
+  limit = 2,
+  sleepDuration = 2000
+) {
   const results = [];
   chunks = chunks.filter((chunk) => chunk.length > 0);
 
@@ -182,7 +193,7 @@ async function processChunks(chunks, data, model, chunkPrompt, limit = 2) {
     const chunkPromises = chunks
       .slice(i, i + limit)
       .map(async (chunk, index) => {
-        await sleep(1000);
+        await sleep(sleepDuration);
         logMessage(`📝 Sending chunk ${i + index + 1} of ${chunks.length}...`);
         logMessage(`📝 Chunk text: ${chunk}`);
 
@@ -278,16 +289,23 @@ function cleanText(text) {
  */
 function splitTextIntoChunks(text, chunkAmount, tokenCount) {
   const chunks = [];
-  let chunkStart = 0;
-  let chunkEnd = chunkAmount;
+  const lines = text.split("\n");
+  let currentChunk = "";
 
-  while (chunkStart < tokenCount) {
-    if (chunkEnd > tokenCount) {
-      chunkEnd = tokenCount;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineTokens = countMessageTokens(line);
+
+    if (currentChunk.length + lineTokens <= chunkAmount) {
+      currentChunk += line + "\n";
+    } else {
+      chunks.push(currentChunk.trim());
+      currentChunk = line + "\n";
     }
-    chunks.push(text.slice(chunkStart, chunkEnd));
-    chunkStart = chunkEnd;
-    chunkEnd = chunkStart + chunkAmount;
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.trim());
   }
 
   return chunks;
